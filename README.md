@@ -6,6 +6,8 @@ HawaPlan helps families make practical plans during winter smog. It combines a l
 
 **Live app:** [hawaplan.harshgupta24716.workers.dev](https://hawaplan.harshgupta24716.workers.dev)
 
+**Demo video:** [35-second HawaPlan overview](https://github.com/harsh-gupta-10/hawaplan/releases/download/v0.1.0/hawaplan-demo.mp4). This is an animated feature walkthrough; use the live app for hands-on interaction.
+
 ## The problem and persona
 
 The primary user is a parent or caregiver who must arrange school runs, errands, walks, or exercise while outdoor air quality changes through the day. They need a useful choice that respects their schedule and family needs, not a generic warning to stay inside. A school or neighborhood group can also copy a short community note about combining trips and avoiding idling.
