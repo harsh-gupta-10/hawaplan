@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hawaplan",
+  "account_id": "b1d481965d10a5b83a86f3ba67c2e0ed",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-11-18",
+  "assets": {
+    "directory": "./dist",
+    "run_worker_first": ["/api/*"],
+  },
+  "ai": { "binding": "AI" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hawaplan-data",
+      "database_id": "d2eb3be2-962f-47d2-928f-f34bf18ceddd",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

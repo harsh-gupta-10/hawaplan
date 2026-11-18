@@ -1,0 +1,16 @@
+{
+  "name": "HawaPlan — a clearer day starts here",
+  "short_name": "HawaPlan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5ef",
+  "theme_color": "#204b35",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
