@@ -11,11 +11,23 @@ The project is ready for the Urban Air Quality Assistant form. These are the val
 
 ## Describe the changes/updates made in the deployed version
 
-HawaPlan now detects an approximate city, offers permission-based device location and city search, and builds plans for one day or 7-/30-day routines. It compares feasible modeled PM₂.₅ windows, categorizes US EPA/WHO AQI levels, tailors guidance across 5 vulnerability personas (general, children, elderly, respiratory, athletes), and offers a 1-click Caregiver & School Brief. It includes multi-pollutant visualization (PM₂.₅, PM₁₀, US AQI) with accessible data tables, explains low-emission and indoor alternatives, supports weekday schedules, and opens prefilled Google Calendar events. Responsive UI, offline forecast caching, saved plans, persistent chat, strict security headers (CSP, X-Frame-Options, nosniff), and optional Cloudflare D1 account sync make the assistant practical for families.
+HawaPlan transforms urban air forecasts into actionable outing and indoor routines. The latest version features:
+
+1. Health-Tailored Planning: Evaluates outings against US EPA & WHO AQI breakpoints across 5 vulnerability profiles (general, children/schools, elderly, respiratory, athletes) with dynamic advisory badges.
+2. Caregiver & School Brief: 1-click printable/copyable briefing for schools, daycare staff, and families.
+3. Multi-Pollutant Analytics: Interactive chart toggling PM₂.₅, PM₁₀, and US AQI, backed by an accessible screen-reader data table.
+4. Modular Architecture & a11y: Refactored UI into dedicated hooks and components, adding ARIA live regions and WCAG keyboard flows.
+5. Production Hardening: HTTP security headers (CSP, X-Frame-Options, nosniff, Permissions-Policy), Cloudflare D1 sync with rate limits, and 51 automated Vitest tests (auth, algorithms, security).
 
 ## Mention the Gen AI services utilized and where
 
-Cloudflare Workers AI runs the @cf/google/gemma-4-26b-a4b-it model in the Worker endpoint POST /api/ask. It uses current Open-Meteo forecast facts, deterministic plan results, US EPA AQI context, user context, and recent chat to answer follow-up questions about outings, indoor alternatives, and lower-emission choices. The forecast comparison itself is deterministic; AI is restricted from inventing numeric exposure or health claims.
+Cloudflare Workers AI runs the Google Gemma model (@cf/google/gemma-4-26b-a4b-it) in the secure server-side Worker endpoint POST /api/ask.
+
+Where & How Utilized:
+
+1. Context-Grounded Follow-ups: Answers conversational user queries regarding outing timing, WHO-aligned indoor mitigation (HEPA/ventilation), and trip-chaining to reduce vehicle emissions.
+2. Strict Anti-Hallucination Guardrails: The Worker injects verified real-time facts into the prompt—including Open-Meteo hourly pollutant metrics, computed US EPA AQI category, user vulnerability profile, and deterministic schedule comparisons.
+3. Safety & Accuracy Separation: All numerical exposure window comparisons are executed deterministically in shared TypeScript logic. The AI model is strictly constrained by system instructions from inventing personal dosage measurements, fabricated statistics, or medical claims.
 
 ## Final checklist
 
