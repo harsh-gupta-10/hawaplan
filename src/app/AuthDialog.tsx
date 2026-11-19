@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cloud, Eye, EyeOff, LockKeyhole, ShieldCheck, X } from "lucide-react";
 
 export type AuthMode = "login" | "signup" | "delete";
@@ -28,12 +28,36 @@ export default function AuthDialog({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialogRef.current?.querySelector<HTMLInputElement>("input")?.focus();
     const listener = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled])",
+        ),
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first && last) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last && first) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", listener);
-    return () => document.removeEventListener("keydown", listener);
+    return () => {
+      document.removeEventListener("keydown", listener);
+      previousFocus?.focus();
+    };
   }, [onClose]);
 
   const submit = async (event: React.FormEvent) => {
@@ -54,13 +78,15 @@ export default function AuthDialog({
   };
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
+    <div className="modal-backdrop">
+      <button
+        type="button"
+        className="modal-overlay-dismiss"
+        onClick={onClose}
+        aria-label="Close dialog"
+      />
       <div
+        ref={dialogRef}
         className="auth-dialog"
         role="dialog"
         aria-modal="true"
@@ -112,7 +138,6 @@ export default function AuthDialog({
             <label className="auth-field">
               Username
               <input
-                autoFocus
                 autoComplete="username"
                 pattern="[a-zA-Z0-9_]{3,24}"
                 minLength={3}
@@ -129,7 +154,6 @@ export default function AuthDialog({
             {mode === "delete" ? "Confirm with your password" : "Password"}
             <span className="password-field">
               <input
-                autoFocus={mode === "delete"}
                 autoComplete={
                   mode === "signup" ? "new-password" : "current-password"
                 }

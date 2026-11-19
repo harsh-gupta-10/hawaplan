@@ -18,6 +18,23 @@ export type SyncStatus = "local" | "saving" | "saved" | "offline";
 const guestKey = "hawaplan-guest-v2";
 const accountKey = (username: string) => `hawaplan-account-v2:${username}`;
 
+function writeLocal(key: string, data: AppData) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeLocal(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* Storage may be unavailable in a private session. */
+  }
+}
+
 function readLocal(key: string): AppData | null {
   try {
     const value = JSON.parse(
@@ -90,9 +107,10 @@ export function useAppState() {
             setSyncStatus("offline");
           }
           if (!active) return;
+          setSyncStatus("saving");
           setAccount(body.user);
           setData(merged);
-          localStorage.removeItem(guestKey);
+          removeLocal(guestKey);
         }
       } catch {
         /* Continue with local guest data. */
@@ -106,16 +124,14 @@ export function useAppState() {
 
   useEffect(() => {
     if (!authReady) return;
-    localStorage.setItem(
+    const locallySaved = writeLocal(
       account ? accountKey(account.username) : guestKey,
-      JSON.stringify(data),
+      data,
     );
-    if (!account) {
-      setSyncStatus("local");
-      return;
-    }
-    setSyncStatus("saving");
+    if (!locallySaved && !account) return;
+    if (!account) return;
     const timer = window.setTimeout(async () => {
+      setSyncStatus("saving");
       try {
         const response = await fetch("/api/data", {
           method: "PUT",
@@ -218,8 +234,9 @@ export function useAppState() {
       ),
     );
     setAccount(body.user);
+    setSyncStatus("saving");
     setData(merged);
-    localStorage.removeItem(guestKey);
+    removeLocal(guestKey);
     setAuthReady(true);
   };
 
@@ -238,10 +255,10 @@ export function useAppState() {
     }
     const response = await fetch("/api/auth/logout", { method: "POST" });
     if (!response.ok) throw new Error("Could not sign out. Please try again.");
-    if (account) localStorage.removeItem(accountKey(account.username));
+    if (account) removeLocal(accountKey(account.username));
     setAccount(null);
     setData(emptyData());
-    localStorage.removeItem(guestKey);
+    removeLocal(guestKey);
   };
 
   const deleteAccount = async (password: string) => {
@@ -253,17 +270,17 @@ export function useAppState() {
     const body = (await response.json()) as { error?: string };
     if (!response.ok)
       throw new Error(body.error ?? "Could not delete account.");
-    if (account) localStorage.removeItem(accountKey(account.username));
+    if (account) removeLocal(accountKey(account.username));
     setAccount(null);
     setData(emptyData());
-    localStorage.removeItem(guestKey);
+    removeLocal(guestKey);
   };
 
   return {
     data,
     account,
     authReady,
-    syncStatus,
+    syncStatus: account ? syncStatus : "local",
     updatePreferences,
     updateSchedule,
     updateWeekdaysOnly,

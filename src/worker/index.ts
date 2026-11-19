@@ -25,8 +25,11 @@ const json = (body: unknown, status = 200, cache = "no-store") =>
   });
 
 function coordinates(url: URL) {
-  const latitude = Number(url.searchParams.get("lat"));
-  const longitude = Number(url.searchParams.get("lon"));
+  const lat = url.searchParams.get("lat");
+  const lon = url.searchParams.get("lon");
+  if (lat === null || lon === null || !lat.trim() || !lon.trim()) return null;
+  const latitude = Number(lat);
+  const longitude = Number(lon);
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -103,14 +106,17 @@ async function handleAsk(request: Request, env: Env): Promise<Response> {
   try {
     const raw = await request.text();
     if (raw.length > 6000) return json({ error: "Request too long." }, 413);
-    body = JSON.parse(raw) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return json({ error: "Invalid request." }, 400);
+    body = parsed as Record<string, unknown>;
   } catch {
     return json({ error: "Invalid JSON." }, 400);
   }
   const question =
     typeof body.question === "string" ? body.question.trim().slice(0, 500) : "";
-  const latitude = Number(body.latitude);
-  const longitude = Number(body.longitude);
+  const latitude = body.latitude;
+  const longitude = body.longitude;
   const city =
     typeof body.city === "string" ? body.city.slice(0, 60) : "your city";
   const history = Array.isArray(body.history)
@@ -128,6 +134,8 @@ async function handleAsk(request: Request, env: Env): Promise<Response> {
     : "";
   if (
     !question ||
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
     Math.abs(latitude) > 90 ||

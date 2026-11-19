@@ -567,11 +567,19 @@
 }
 .auth-dialog {
   position: relative;
+  z-index: 1;
   width: min(420px, 100%);
   background: #fff;
   border-radius: 19px;
   padding: 30px;
   box-shadow: 0 25px 90px #0b231d4d;
+}
+.modal-overlay-dismiss {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
 }
 .modal-close {
   position: absolute;
