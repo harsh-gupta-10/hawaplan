@@ -35,15 +35,31 @@ export default function ConversationSection({
   onQuestionChange,
   onAsk,
 }: ConversationSectionProps) {
+  const isElevatedSmog = Boolean(forecast && forecast.currentPm25 >= 55.5);
+
+  const promptSuggestions = isElevatedSmog
+    ? [
+        "Are N95 masks recommended right now?",
+        "What if pickup time is fixed?",
+        "What can we do indoors today?",
+        "How do we make fewer car trips?",
+      ]
+    : [
+        "What if pickup cannot move?",
+        "What can we do indoors?",
+        "How do we make fewer car trips?",
+        "When is the best window for outdoor play?",
+      ];
+
   return (
-    <section className="conversation-section">
+    <section className="conversation-section" aria-labelledby="chat-heading">
       <div className="conversation-head">
-        <div className="assistant-avatar">
+        <div className="assistant-avatar" aria-hidden="true">
           <Sparkles size={21} />
         </div>
         <div>
           <span className="eyebrow">YOUR AIR ASSISTANT</span>
-          <h2>Ask HawaPlan</h2>
+          <h2 id="chat-heading">Ask HawaPlan</h2>
           <p>
             Your conversation is{" "}
             {signedIn ? "synced to your account" : "saved on this device"}.
@@ -51,20 +67,28 @@ export default function ConversationSection({
         </div>
         {messages.length > 0 && (
           <button
+            type="button"
             className="text-action"
             onClick={() => {
               if (window.confirm("Clear this conversation history?"))
                 onClearChat();
             }}
+            aria-label="Clear chat conversation"
           >
-            <Trash2 size={15} /> Clear chat
+            <Trash2 size={15} aria-hidden="true" /> Clear chat
           </button>
         )}
       </div>
-      <div className="chat-window">
+
+      <div
+        className="chat-window"
+        role="log"
+        aria-live="polite"
+        aria-label="Chat messages"
+      >
         {messages.length === 0 ? (
           <div className="chat-welcome">
-            <div className="chat-welcome-icon">
+            <div className="chat-welcome-icon" aria-hidden="true">
               <MessageCircle size={25} />
             </div>
             <strong>What does your day look like?</strong>
@@ -76,7 +100,7 @@ export default function ConversationSection({
         ) : (
           messages.map((message) => (
             <div className={`chat-bubble ${message.role}`} key={message.id}>
-              <div className="chat-bubble-avatar">
+              <div className="chat-bubble-avatar" aria-hidden="true">
                 {message.role === "assistant" ? (
                   <Sparkles size={16} />
                 ) : (
@@ -94,20 +118,23 @@ export default function ConversationSection({
           ))
         )}
         {asking && (
-          <div className="chat-thinking">
-            <Sparkles size={17} className="spin" /> Thinking with your plan…
+          <div className="chat-thinking" role="status" aria-live="polite">
+            <Sparkles size={17} className="spin" aria-hidden="true" /> Thinking
+            with your plan…
           </div>
         )}
         <div ref={chatEnd} />
       </div>
+
       <div className="conversation-compose">
-        <div className="prompt-suggestions">
-          {[
-            "What if pickup cannot move?",
-            "What can we do indoors?",
-            "How do we make fewer car trips?",
-          ].map((suggestion) => (
+        <div
+          className="prompt-suggestions"
+          role="group"
+          aria-label="Suggested questions"
+        >
+          {promptSuggestions.map((suggestion) => (
             <button
+              type="button"
               key={suggestion}
               onClick={() => onQuestionChange(suggestion)}
             >
@@ -115,10 +142,12 @@ export default function ConversationSection({
             </button>
           ))}
         </div>
+
         <div className="ask-box">
-          <MessageCircle size={20} />
+          <MessageCircle size={20} aria-hidden="true" />
           <input
-            aria-label="Ask HawaPlan"
+            id="chat-input-field"
+            aria-label="Ask HawaPlan a question"
             value={question}
             onChange={(event) => onQuestionChange(event.target.value)}
             onKeyDown={(event) => {
@@ -128,22 +157,25 @@ export default function ConversationSection({
             maxLength={500}
           />
           <button
+            type="button"
             onClick={onAsk}
             disabled={!forecast || !question.trim() || asking}
             aria-label="Send message"
           >
             {asking ? (
-              <RefreshCw size={18} className="spin" />
+              <RefreshCw size={18} className="spin" aria-hidden="true" />
             ) : (
-              <Send size={18} />
+              <Send size={18} aria-hidden="true" />
             )}
           </button>
         </div>
+
         {askError && (
-          <p className="ask-error">
+          <p className="ask-error" role="alert">
             {askError} Your question is saved; you can try again.
           </p>
         )}
+
         <p className="ai-note">
           Answers use a broad-area model forecast. For personal medical advice,
           consult a clinician.

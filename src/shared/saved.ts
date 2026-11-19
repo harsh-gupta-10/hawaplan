@@ -1,3 +1,8 @@
+/**
+ * @file saved.ts
+ * Data schemas and synchronization logic for user preferences, saved plans, and chat history.
+ */
+
 import type { PlanOptions } from "./planner";
 
 export interface Place {
@@ -56,6 +61,7 @@ export const defaultPlace: Place = {
   longitude: 77.209,
   source: "city",
 };
+
 export const defaultOptions: PlanOptions = {
   activity: "school",
   preferredHour: 15,
@@ -63,8 +69,12 @@ export const defaultOptions: PlanOptions = {
   flexibilityHours: 2,
   travelMode: "car",
   sensitive: true,
+  vulnerabilityProfile: "general",
 };
 
+/**
+ * Returns a clean initial AppData state for guests or new accounts.
+ */
 export const emptyData = (): AppData => ({
   place: defaultPlace,
   options: defaultOptions,
@@ -77,26 +87,55 @@ export const emptyData = (): AppData => ({
   spanDays: 1,
 });
 
+/**
+ * Type guard validating that an untrusted object strictly conforms to PlanOptions.
+ *
+ * @param value Untrusted input object
+ */
 export function isPlanOptions(value: unknown): value is PlanOptions {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
-  return (
+  const validActivity =
     typeof o.activity === "string" &&
-    ["school", "walk", "errands", "exercise"].includes(o.activity) &&
+    ["school", "walk", "errands", "exercise"].includes(o.activity);
+  const validHour =
     typeof o.preferredHour === "number" &&
     Number.isInteger(o.preferredHour) &&
     o.preferredHour >= 0 &&
-    o.preferredHour <= 23 &&
+    o.preferredHour <= 23;
+  const validDuration =
     typeof o.durationMinutes === "number" &&
-    [30, 60, 90, 120].includes(o.durationMinutes) &&
+    [30, 60, 90, 120].includes(o.durationMinutes);
+  const validFlexibility =
     typeof o.flexibilityHours === "number" &&
-    [0, 2, 4, 6].includes(o.flexibilityHours) &&
+    [0, 2, 4, 6].includes(o.flexibilityHours);
+  const validTravelMode =
     typeof o.travelMode === "string" &&
-    ["car", "bus", "walk", "cycle"].includes(o.travelMode) &&
-    typeof o.sensitive === "boolean"
+    ["car", "bus", "walk", "cycle"].includes(o.travelMode);
+  const validSensitive = typeof o.sensitive === "boolean";
+  const validProfile =
+    o.vulnerabilityProfile === undefined ||
+    (typeof o.vulnerabilityProfile === "string" &&
+      ["general", "children", "elderly", "respiratory", "athletes"].includes(
+        o.vulnerabilityProfile,
+      ));
+
+  return (
+    validActivity &&
+    validHour &&
+    validDuration &&
+    validFlexibility &&
+    validTravelMode &&
+    validSensitive &&
+    validProfile
   );
 }
 
+/**
+ * Type guard validating that an untrusted object represents a valid geographic Place.
+ *
+ * @param value Untrusted input object
+ */
 export function isPlace(value: unknown): value is Place {
   if (!value || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
@@ -113,6 +152,13 @@ export function isPlace(value: unknown): value is Place {
   );
 }
 
+/**
+ * Deterministically merges local client state with remote cloud storage data.
+ * Resolves conflict using timestamps, preserves soft deletes, and respects chat clear timestamps.
+ *
+ * @param local Client-side application data
+ * @param remote Cloud-stored application data
+ */
 export function mergeData(local: AppData, remote: AppData): AppData {
   const preferences =
     local.preferencesUpdatedAt >= remote.preferencesUpdatedAt ? local : remote;

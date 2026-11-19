@@ -1,30 +1,47 @@
+/**
+ * @file index.ts
+ * Cloudflare Worker entry point handling routing for forecasts, geocoding,
+ * Workers AI grounded assistant, user authentication, and Cloudflare D1 synchronization.
+ */
+
 import {
   activityLabels,
   buildPlan,
   formatTime,
+  getAqiCategory,
   type Forecast,
+  type PlanOptions,
 } from "../shared/planner";
 import { isPlanOptions } from "../shared/saved";
 import { handleAuth } from "./auth";
 import { handleData } from "./data";
 
-interface Env {
+export interface Env {
   AI: {
     run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
   };
   DB: D1Database;
 }
 
-const json = (body: unknown, status = 200, cache = "no-store") =>
+/**
+ * Standardized JSON response helper with comprehensive HTTP security headers.
+ */
+const json = (body: unknown, status = 200, cache = "no-store"): Response =>
   Response.json(body, {
     status,
     headers: {
       "Cache-Control": cache,
       "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Permissions-Policy": "geolocation=(self)",
     },
   });
 
-function coordinates(url: URL) {
+/**
+ * Extracts and strictly validates geographic coordinates from URL query parameters.
+ */
+function coordinates(url: URL): { latitude: number; longitude: number } | null {
   const lat = url.searchParams.get("lat");
   const lon = url.searchParams.get("lon");
   if (lat === null || lon === null || !lat.trim() || !lon.trim()) return null;
@@ -40,6 +57,9 @@ function coordinates(url: URL) {
   return { latitude, longitude };
 }
 
+/**
+ * Fetches 7-day hourly atmospheric data from Open-Meteo CAMS air quality model.
+ */
 async function forecastFor(
   latitude: number,
   longitude: number,
@@ -99,6 +119,10 @@ async function forecastFor(
   };
 }
 
+/**
+ * Handles grounded AI assistance via Cloudflare Workers AI Gemma model.
+ * Strict prompt boundaries prevent hallucination of medical diagnosis or fabricated numerical claims.
+ */
 async function handleAsk(request: Request, env: Env): Promise<Response> {
   if (Number(request.headers.get("content-length") ?? 0) > 6000)
     return json({ error: "Request too long." }, 413);
@@ -149,20 +173,28 @@ async function handleAsk(request: Request, env: Env): Promise<Response> {
   }
   try {
     const forecast = await forecastFor(latitude, longitude, city);
-    const plan = buildPlan(forecast, body.options);
+    const options = body.options as PlanOptions;
+    const plan = buildPlan(forecast, options);
+    const aqiCategory = getAqiCategory(
+      forecast.currentPm25,
+      forecast.hours[0]?.aqi,
+    );
     const facts = {
       city,
       model: forecast.source,
       modelTime: forecast.currentTime,
-      activity: activityLabels[body.options.activity],
-      travelMode: body.options.travelMode,
-      familyNeedsExtraCare: body.options.sensitive,
+      currentAqiCategory: aqiCategory.label,
+      currentAqiAdvisory: aqiCategory.advisory,
+      activity: activityLabels[options.activity],
+      travelMode: options.travelMode,
+      familyNeedsExtraCare: options.sensitive,
+      vulnerabilityProfile: options.vulnerabilityProfile ?? "general",
       plannedTime: plan.baseline ? formatTime(plan.baseline.start) : null,
       plannedAmbientPm25: plan.baseline?.averagePm25 ?? null,
       lowerForecastTime: plan.best ? formatTime(plan.best.start) : null,
       lowerAmbientPm25: plan.best?.averagePm25 ?? null,
       comparisonPercent: plan.reductionPercent,
-      flexibilityHours: body.options.flexibilityHours,
+      flexibilityHours: options.flexibilityHours,
       emissionAction: plan.emissionAction,
       indoorAction: plan.indoorAction,
       careAction: plan.careAction,

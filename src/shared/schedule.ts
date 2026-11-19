@@ -1,14 +1,29 @@
+/**
+ * @file schedule.ts
+ * Schedule generation, recurrence calculation, and Google Calendar integration.
+ */
+
 import type { PlanOptions } from "./planner";
 import { activityLabels } from "./planner";
 import type { Place } from "./saved";
 
 export type SpanDays = 1 | 7 | 30;
 
+/**
+ * Adds an integer number of days to a Gregorian date string (YYYY-MM-DD).
+ */
 export function addDays(date: string, amount: number): string {
   const timestamp = Date.parse(`${date}T00:00:00Z`);
   return new Date(timestamp + amount * 86_400_000).toISOString().slice(0, 10);
 }
 
+/**
+ * Generates an array of sequential calendar dates, optionally filtering out weekends for school schedules.
+ *
+ * @param startDate Start date in YYYY-MM-DD format
+ * @param spanDays Routine duration (1, 7, or 30 days)
+ * @param weekdaysOnly Filter Monday-Friday only
+ */
 export function scheduleDates(
   startDate: string,
   spanDays: SpanDays,
@@ -25,6 +40,9 @@ export function scheduleDates(
       });
 }
 
+/**
+ * Formats a Gregorian date string into a localized short date (e.g. "Thu, Nov 19").
+ */
 export function formatScheduleDate(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, {
     weekday: "short",
@@ -47,6 +65,9 @@ function calendarStamp(
   return time.toISOString().replace(/[-:]/g, "").slice(0, 15);
 }
 
+/**
+ * Builds a prefilled Google Calendar event draft URL with bounded recurrence and grounded details.
+ */
 export function googleCalendarUrl(input: {
   startDate: string;
   spanDays: SpanDays;
@@ -105,4 +126,37 @@ export function googleCalendarUrl(input: {
         : `RRULE:FREQ=DAILY;COUNT=${spanDays}`,
     );
   return url.toString();
+}
+
+/**
+ * Generates a structured, printable text summary of an outing plan for caregivers,
+ * babysitters, or school teachers.
+ */
+export function caregiverSummaryText(input: {
+  place: Place;
+  activity: string;
+  date: string;
+  timeWindow: string;
+  summary: string;
+  careAction?: string | null;
+  emissionAction?: string;
+  indoorAction?: string;
+}): string {
+  const lines = [
+    `📋 HAWAPLAN CARE BRIEF · ${input.place.name.toUpperCase()}`,
+    `--------------------------------------------------`,
+    `Activity:    ${input.activity}`,
+    `Date:        ${formatScheduleDate(input.date)}`,
+    `Time Window: ${input.timeWindow}`,
+    `Conditions:  ${input.summary}`,
+    input.careAction
+      ? `\n⚠️ SENSITIVE CARE GUIDANCE:\n${input.careAction}`
+      : "",
+    input.indoorAction ? `\n🏠 INDOOR BACKUP:\n${input.indoorAction}` : "",
+    input.emissionAction ? `\n🌱 TRAVEL ADVICE:\n${input.emissionAction}` : "",
+    `--------------------------------------------------`,
+    `Generated via HawaPlan (https://hawaplan.harshgupta24716.workers.dev)`,
+    `Note: Modeled outdoor estimate. Verify local air before stepping out.`,
+  ];
+  return lines.filter(Boolean).join("\n");
 }

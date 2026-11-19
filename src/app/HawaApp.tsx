@@ -1,27 +1,13 @@
+/**
+ * @file HawaApp.tsx
+ * Primary application container coordinating state, layout, navigation, and modal dialogues.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  CloudFog,
-  CloudOff,
-  History,
-  House,
-  Leaf,
-  LocateFixed,
-  MapPin,
-  Menu,
-  RefreshCw,
-  Search,
-  UserRound,
-  UsersRound,
-  Wind,
-  X,
-} from "lucide-react";
+import { Check } from "lucide-react";
 import {
   buildPlan,
   formatTime,
-  type Forecast,
   type PlanOptions,
   type Activity as Outing,
 } from "../shared/planner";
@@ -33,16 +19,23 @@ import {
 } from "../shared/schedule";
 import type { Place, SavedPlan } from "../shared/saved";
 import { useAppState } from "./useAppState";
+import { useForecast } from "./hooks/useForecast";
+import { useCitySearch } from "./hooks/useCitySearch";
+import { useGeolocation } from "./hooks/useGeolocation";
+import AppSidebar, { type Tab } from "./components/AppSidebar";
+import AppHeader from "./components/AppHeader";
+import CityPickerPopover from "./components/CityPickerPopover";
+import AccountPopover from "./components/AccountPopover";
+import CaregiverModal from "./components/CaregiverModal";
 import AuthDialog, { type AuthMode } from "./AuthDialog";
 import TodayPage from "./TodayPage";
 import SavedPlansPage from "./SavedPlansPage";
 import IndoorGuidePage from "./IndoorGuidePage";
 import CommunityPage from "./CommunityPage";
 
-type Tab = "today" | "plans" | "indoors" | "community";
-type CityResult = Place & { id: number };
 const tabKey = "hawaplan-tab-v2";
 const draftKey = "hawaplan-chat-draft-v2";
+
 const readTab = (): Tab => {
   try {
     const value = localStorage.getItem(tabKey);
@@ -53,38 +46,21 @@ const readTab = (): Tab => {
     return "today";
   }
 };
-const readDraft = () => {
+
+const readDraft = (): string => {
   try {
     return localStorage.getItem(draftKey)?.slice(0, 500) ?? "";
   } catch {
     return "";
   }
 };
+
 const activityNames: Record<Outing, string> = {
   school: "School run",
   walk: "Family walk",
   errands: "Errands",
   exercise: "Outdoor exercise",
 };
-const forecastKey = (place: Place) =>
-  `hawaplan-forecast-v2:${place.latitude.toFixed(2)}:${place.longitude.toFixed(2)}`;
-
-function loadForecast(place: Place): Forecast | null {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem(forecastKey(place)) ?? "null",
-    ) as Forecast | null;
-    if (
-      saved?.hours?.length &&
-      saved.latitude === place.latitude &&
-      saved.longitude === place.longitude
-    )
-      return saved;
-  } catch {
-    /* Ignore an invalid local cache. */
-  }
-  return null;
-}
 
 export default function HawaApp() {
   const {
@@ -103,75 +79,62 @@ export default function HawaApp() {
     signOut,
     deleteAccount,
   } = useAppState();
+
   const { place, options } = data;
   const [tab, setTab] = useState<Tab>(readTab);
   const [mobileNav, setMobileNav] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
-  const [cityQuery, setCityQuery] = useState("");
-  const [citySearch, setCitySearch] = useState<{
-    query: string;
-    loading: boolean;
-    results: CityResult[];
-  }>({ query: "", loading: false, results: [] });
-  const activeCityQuery = cityQuery.trim();
-  const places = citySearch.query === activeCityQuery ? citySearch.results : [];
-  const searching =
-    activeCityQuery.length >= 2 &&
-    (citySearch.query !== activeCityQuery || citySearch.loading);
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState("");
-  const locationKey = forecastKey(place);
-  const cachedForecast = useMemo(() => loadForecast(place), [place]);
-  const [forecastResult, setForecastResult] = useState<{
-    locationKey: string;
-    value: Forecast;
-  } | null>(null);
-  const [forecastRequest, setForecastRequest] = useState<{
-    key: string;
-    error: string;
-  } | null>(null);
+  const [caregiverModalOpen, setCaregiverModalOpen] = useState(false);
+
   const [refreshCount, setRefreshCount] = useState(0);
-  const requestKey = [locationKey, place.name, refreshCount].join(":");
-  const forecast =
-    forecastResult?.locationKey === locationKey
-      ? forecastResult.value
-      : cachedForecast;
-  const forecastError =
-    forecastRequest?.key === requestKey ? forecastRequest.error : "";
-  const loadingForecast = forecastRequest?.key !== requestKey;
+  const { forecast, loadingForecast, forecastError } = useForecast(
+    place,
+    refreshCount,
+  );
+
+  const { cityQuery, setCityQuery, places, searching, resetSearch } =
+    useCitySearch(cityOpen);
+
+  const [toast, setToast] = useState("");
+  const { locating, locationError, setLocationError, requestLocation } =
+    useGeolocation(
+      (newPlace) => {
+        updatePreferences(newPlace, options);
+        setCityOpen(false);
+      },
+      (msg) => setToast(msg),
+    );
+
   const [question, setQuestion] = useState(readDraft);
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState("");
-  const [toast, setToast] = useState("");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+
   const autoLocationAttempted = useRef(false);
   const chatEnd = useRef<HTMLDivElement>(null);
-  const citySearchInput = useRef<HTMLInputElement>(null);
   const closeAuth = useCallback(() => setAuthMode(null), []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  useEffect(() => {
-    if (cityOpen) citySearchInput.current?.focus();
-  }, [cityOpen]);
 
   useEffect(() => {
     try {
       localStorage.setItem(tabKey, tab);
     } catch {
-      /* Keep this session usable. */
+      /* Session usable fallback */
     }
   }, [tab]);
+
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, question);
     } catch {
-      /* Keep this session usable. */
+      /* Session usable fallback */
     }
   }, [question]);
 
@@ -199,82 +162,11 @@ export default function HawaApp() {
   }, [authReady, data.preferencesUpdatedAt, options, updatePreferences]);
 
   useEffect(() => {
-    const cached = loadForecast(place);
-    const controller = new AbortController();
-    const params = new URLSearchParams({
-      lat: String(place.latitude),
-      lon: String(place.longitude),
-      city: place.name,
-    });
-    fetch(`/api/forecast?${params}`, {
-      signal: controller.signal,
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error("The live forecast could not be loaded.");
-        return response.json() as Promise<Forecast>;
-      })
-      .then((result) => {
-        setForecastResult({ locationKey, value: result });
-        setForecastRequest({ key: requestKey, error: "" });
-        try {
-          localStorage.setItem(forecastKey(place), JSON.stringify(result));
-        } catch {
-          /* Live forecast is still usable. */
-        }
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError")
-          setForecastRequest({
-            key: requestKey,
-            error: cached
-              ? "Showing your last saved forecast. Check back when online."
-              : error.message,
-          });
-      });
-    return () => controller.abort();
-  }, [place, locationKey, requestKey]);
-
-  useEffect(() => {
-    if (!cityOpen || activeCityQuery.length < 2) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setCitySearch({ query: activeCityQuery, loading: true, results: [] });
-      fetch("/api/places?q=" + encodeURIComponent(activeCityQuery), {
-        signal: controller.signal,
-      })
-        .then(
-          (response) => response.json() as Promise<{ results?: CityResult[] }>,
-        )
-        .then((result) => {
-          if (!controller.signal.aborted)
-            setCitySearch({
-              query: activeCityQuery,
-              loading: false,
-              results: result.results ?? [],
-            });
-        })
-        .catch(() => {
-          if (!controller.signal.aborted)
-            setCitySearch({
-              query: activeCityQuery,
-              loading: false,
-              results: [],
-            });
-        });
-    }, 300);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [cityOpen, activeCityQuery]);
-
-  useEffect(() => {
     if (data.messages.length && chatEnd.current?.parentElement)
       chatEnd.current.parentElement.scrollTop =
         chatEnd.current.parentElement.scrollHeight;
   }, [data.messages.length]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 3000);
@@ -298,10 +190,12 @@ export default function HawaApp() {
   const spanDays: SpanDays =
     data.spanDays === 7 || data.spanDays === 30 ? data.spanDays : 1;
   const weekdaysOnly = data.weekdaysOnly ?? options.activity === "school";
+
   const plan = useMemo(
     () => (forecast ? buildPlan(forecast, options, startDate) : null),
     [forecast, options, startDate],
   );
+
   const schedule = useMemo(
     () =>
       scheduleDates(startDate, spanDays, weekdaysOnly).map((date) => ({
@@ -310,9 +204,11 @@ export default function HawaApp() {
       })),
     [startDate, spanDays, weekdaysOnly, forecast, options],
   );
+
   const bestDifferent = Boolean(
     plan?.best && plan?.baseline && plan.best.start !== plan.baseline.start,
   );
+
   const calendarUrl = googleCalendarUrl({
     startDate,
     spanDays,
@@ -324,53 +220,21 @@ export default function HawaApp() {
     indoorAction: plan?.indoorAction,
     weekdaysOnly,
   });
+
   const shareText = `HawaPlan for ${place.name}: ${activityNames[options.activity]} ${plan?.best ? `at ${formatTime(plan.best.start)}` : "when practical"}. ${plan?.best && plan?.baseline && bestDifferent ? `Modeled outdoor PM2.5 is ${plan.best.averagePm25} vs ${plan.baseline.averagePm25} µg/m³ at the original time.` : ""} ${plan?.emissionAction ?? "Combine necessary trips where possible."} This is a broad-area forecast, not a personal exposure reading. ${window.location.origin}`;
 
   const updateOption = <K extends keyof PlanOptions>(
     key: K,
     value: PlanOptions[K],
   ) => updatePreferences(place, { ...options, [key]: value });
+
   const choosePlace = (next: Place) => {
     updatePreferences({ ...next, source: next.source ?? "city" }, options);
     setCityOpen(false);
     setLocationError("");
     setTab("today");
   };
-  const useDeviceLocation = () => {
-    setLocationError("");
-    setLocating(true);
-    if (!navigator.geolocation) {
-      setLocating(false);
-      setLocationError("This browser does not support device location.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = Math.round(position.coords.latitude * 100) / 100;
-        const longitude = Math.round(position.coords.longitude * 100) / 100;
-        choosePlace({
-          id: 0,
-          name: "Current area",
-          latitude,
-          longitude,
-          source: "device",
-        });
-        setLocating(false);
-        setToast(
-          "Your current area is ready. Coordinates are rounded before saving.",
-        );
-      },
-      (error) => {
-        setLocating(false);
-        setLocationError(
-          error.code === 1
-            ? "Location permission was not granted. You can choose a city instead."
-            : "Could not detect your location. Try searching for your city.",
-        );
-      },
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 5 * 60_000 },
-    );
-  };
+
   const ask = async () => {
     const text = question.trim();
     if (!forecast || !text || asking) return;
@@ -412,6 +276,7 @@ export default function HawaApp() {
       setAsking(false);
     }
   };
+
   const saveCurrentPlan = () => {
     const saved: SavedPlan = {
       id: crypto.randomUUID(),
@@ -432,7 +297,7 @@ export default function HawaApp() {
           : bestDifferent && plan
             ? `${plan.reductionPercent}% lower modeled ambient PM₂.₅ than your preferred time`
             : plan?.best
-              ? `${plan.best.averagePm25} µg/m³ modeled ambient PM₂.₅`
+              ? `${plan.best.averagePm25} µg/m³ modeled ambient PM₂.₅ (${plan.aqiCategory?.label ?? "Forecasted"})`
               : "Preferred-time routine. Forecast not yet available; recheck before going.",
       place,
       options,
@@ -445,6 +310,7 @@ export default function HawaApp() {
     savePlan(saved);
     setToast("Plan saved to your collection.");
   };
+
   const restorePlan = (saved: SavedPlan) => {
     updatePreferences(saved.place, saved.options);
     updateSchedule(saved.startDate ?? "", saved.spanDays ?? 1);
@@ -455,6 +321,7 @@ export default function HawaApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
     setToast("Plan restored. We’re refreshing its forecast.");
   };
+
   const copyPlan = async () => {
     try {
       await navigator.clipboard.writeText(shareText);
@@ -465,6 +332,7 @@ export default function HawaApp() {
       setToast("Copying failed. Please select the note and copy it.");
     }
   };
+
   const navigate = (next: Tab) => {
     setTab(next);
     setMobileNav(false);
@@ -473,264 +341,74 @@ export default function HawaApp() {
 
   return (
     <div className="app-shell v2">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {mobileNav && (
         <button
           className="mobile-scrim"
           aria-label="Close menu"
           onClick={() => setMobileNav(false)}
+          type="button"
         />
       )}
-      <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
-        <div className="brand">
-          <div className="brand-mark">
-            <Wind size={27} strokeWidth={2.5} />
-          </div>
-          <div>
-            <strong>
-              hawa<span>plan</span>
-            </strong>
-            <small>Find your clearer path.</small>
-          </div>
-        </div>
-        <div className="nav-label">YOUR WORKSPACE</div>
-        <nav aria-label="Main navigation">
-          <button
-            className={`nav-item ${tab === "today" ? "active" : ""}`}
-            aria-current={tab === "today" ? "page" : undefined}
-            onClick={() => navigate("today")}
-          >
-            <CloudFog size={19} /> Today’s plan{" "}
-            <ArrowRight className="nav-arrow" size={16} />
-          </button>
-          <button
-            className={`nav-item ${tab === "plans" ? "active" : ""}`}
-            aria-current={tab === "plans" ? "page" : undefined}
-            onClick={() => navigate("plans")}
-          >
-            <History size={19} /> Saved plans{" "}
-            <span className="nav-count">{data.plans.length}</span>
-          </button>
-          <button
-            className={`nav-item ${tab === "indoors" ? "active" : ""}`}
-            aria-current={tab === "indoors" ? "page" : undefined}
-            onClick={() => navigate("indoors")}
-          >
-            <House size={19} /> Indoor air guide{" "}
-            <ArrowRight className="nav-arrow" size={16} />
-          </button>
-          <button
-            className={`nav-item ${tab === "community" ? "active" : ""}`}
-            aria-current={tab === "community" ? "page" : undefined}
-            onClick={() => navigate("community")}
-          >
-            <UsersRound size={19} /> Community note{" "}
-            <ArrowRight className="nav-arrow" size={16} />
-          </button>
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-tip">
-            <div className="tip-icon">
-              <Leaf size={20} />
-            </div>
-            <strong>Your day, remembered.</strong>
-            <p>
-              {account
-                ? "Plans and chats sync to your account."
-                : "Plans and chats stay on this device until you sign in."}
-            </p>
-          </div>
-          <div className="sidebar-foot">
-            {account ? `@${account.username}` : "Guest mode"} <span>✳</span>
-          </div>
-        </div>
-      </aside>
-      <main className="main-area">
-        <header className="topbar">
-          <button
-            className="mobile-menu"
-            aria-label={mobileNav ? "Close menu" : "Open menu"}
-            aria-expanded={mobileNav}
-            onClick={() => setMobileNav(!mobileNav)}
-          >
-            {mobileNav ? <X /> : <Menu />}
-          </button>
-          <div className="topbar-context">
-            <span className="live-dot" /> PLAN YOUR AIR
-          </div>
-          <div className="topbar-actions">
-            <span
-              className={`sync-pill ${syncStatus}`}
-              title={account ? "Account sync status" : "Saved in this browser"}
-            >
-              {syncStatus === "saving" ? (
-                <RefreshCw size={14} className="spin" />
-              ) : syncStatus === "offline" ? (
-                <CloudOff size={14} />
-              ) : (
-                <Check size={14} />
-              )}
-              {syncStatus === "saving"
-                ? "Saving"
-                : syncStatus === "saved"
-                  ? "Synced"
-                  : syncStatus === "offline"
-                    ? "On this device"
-                    : "On this device"}
-            </span>
-            <div className="city-picker">
-              <button
-                className="city-button"
-                onClick={() => {
-                  setCityOpen(!cityOpen);
-                  setAccountOpen(false);
-                  setCityQuery("");
-                }}
-                aria-expanded={cityOpen}
-              >
-                <MapPin size={17} />
-                <span>
-                  {place.name}
-                  {place.country ? `, ${place.country}` : ""}
-                </span>
-                <ChevronDown size={15} />
-              </button>
-              {cityOpen && (
-                <div className="city-popover">
-                  <button
-                    className="locate-option"
-                    onClick={useDeviceLocation}
-                    disabled={locating}
-                  >
-                    <LocateFixed size={17} />
-                    <span>
-                      <strong>
-                        {locating
-                          ? "Finding your area…"
-                          : "Use my current area"}
-                      </strong>
-                      <small>
-                        Asks for browser permission · saves rounded coordinates
-                      </small>
-                    </span>
-                  </button>
-                  <div className="city-search">
-                    <Search size={17} />
-                    <input
-                      ref={citySearchInput}
-                      aria-label="Search for a city"
-                      placeholder="Search for a city"
-                      value={cityQuery}
-                      onChange={(event) => setCityQuery(event.target.value)}
-                    />
-                  </div>
-                  <div className="city-results">
-                    {searching ? (
-                      <p>Searching…</p>
-                    ) : cityQuery.length < 2 ? (
-                      <p>Or enter a city name above.</p>
-                    ) : places.length ? (
-                      places.map((result) => (
-                        <button
-                          key={`${result.id}-${result.country}`}
-                          onClick={() => choosePlace(result)}
-                        >
-                          <MapPin size={15} />
-                          <span>
-                            {result.name}
-                            <small>
-                              {[result.admin1, result.country]
-                                .filter(Boolean)
-                                .join(", ")}
-                            </small>
-                          </span>
-                        </button>
-                      ))
-                    ) : (
-                      <p>No cities found.</p>
-                    )}
-                  </div>
-                  {locationError && (
-                    <p className="location-error">{locationError}</p>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="account-picker">
-              <button
-                className="account-button"
-                aria-label={
-                  account
-                    ? `Account: ${account.username}`
-                    : "Sign in or create account"
-                }
-                onClick={() => {
-                  setAccountOpen(!accountOpen);
-                  setCityOpen(false);
-                }}
-                aria-expanded={accountOpen}
-              >
-                <UserRound size={16} />
-                <span>{account ? account.username : "Sign in"}</span>
-                <ChevronDown size={14} />
-              </button>
-              {accountOpen && (
-                <div className="account-popover">
-                  {account ? (
-                    <>
-                      <div className="account-pop-head">
-                        <strong>@{account.username}</strong>
-                        <small>
-                          {syncStatus === "saved"
-                            ? "Your data is synced"
-                            : "Your data is on this device"}
-                        </small>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setAccountOpen(false);
-                          signOut().catch(() =>
-                            setToast("Could not sign out. Try again."),
-                          );
-                        }}
-                      >
-                        Sign out
-                      </button>
-                      <button
-                        className="danger-text"
-                        onClick={() => {
-                          setAccountOpen(false);
-                          setAuthMode("delete");
-                        }}
-                      >
-                        Delete account & data
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <p>Keep your plans and chats across devices.</p>
-                      <button
-                        onClick={() => {
-                          setAccountOpen(false);
-                          setAuthMode("login");
-                        }}
-                      >
-                        Sign in
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAccountOpen(false);
-                          setAuthMode("signup");
-                        }}
-                      >
-                        Create account
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+
+      <AppSidebar
+        tab={tab}
+        planCount={data.plans.length}
+        account={account}
+        mobileNav={mobileNav}
+        onNavigate={navigate}
+      />
+
+      <main id="main-content" className="main-area" tabIndex={-1}>
+        <AppHeader
+          place={place}
+          account={account}
+          syncStatus={syncStatus}
+          mobileNav={mobileNav}
+          cityOpen={cityOpen}
+          accountOpen={accountOpen}
+          onToggleMobileNav={() => setMobileNav(!mobileNav)}
+          onToggleCity={() => {
+            setCityOpen(!cityOpen);
+            setAccountOpen(false);
+            resetSearch();
+          }}
+          onToggleAccount={() => {
+            setAccountOpen(!accountOpen);
+            setCityOpen(false);
+          }}
+          childrenCityPopover={
+            <CityPickerPopover
+              cityQuery={cityQuery}
+              searching={searching}
+              places={places}
+              locating={locating}
+              locationError={locationError}
+              onQueryChange={setCityQuery}
+              onSelectPlace={choosePlace}
+              onUseDeviceLocation={requestLocation}
+              onClose={() => setCityOpen(false)}
+            />
+          }
+          childrenAccountPopover={
+            <AccountPopover
+              account={account}
+              syncStatus={syncStatus}
+              onSignOut={() => {
+                setAccountOpen(false);
+                signOut().catch(() =>
+                  setToast("Could not sign out. Try again."),
+                );
+              }}
+              onOpenAuth={(mode) => setAuthMode(mode)}
+              onClose={() => setAccountOpen(false)}
+            />
+          }
+        />
+
         {tab === "today" && (
           <TodayPage
             place={place}
@@ -754,7 +432,7 @@ export default function HawaApp() {
             asking={asking}
             askError={askError}
             chatEnd={chatEnd}
-            onUseDeviceLocation={useDeviceLocation}
+            onUseDeviceLocation={requestLocation}
             onUpdateSchedule={updateSchedule}
             onUpdateWeekdaysOnly={updateWeekdaysOnly}
             onSavePlan={saveCurrentPlan}
@@ -763,8 +441,10 @@ export default function HawaApp() {
             onClearChat={clearChat}
             onQuestionChange={setQuestion}
             onAsk={ask}
+            onOpenCaregiverBrief={() => setCaregiverModalOpen(true)}
           />
         )}
+
         {tab === "plans" && (
           <SavedPlansPage
             plans={data.plans}
@@ -773,7 +453,9 @@ export default function HawaApp() {
             onNavigateToday={() => navigate("today")}
           />
         )}
+
         {tab === "indoors" && <IndoorGuidePage />}
+
         {tab === "community" && (
           <CommunityPage
             shareText={shareText}
@@ -781,6 +463,7 @@ export default function HawaApp() {
             onCopyPlan={copyPlan}
           />
         )}
+
         <footer className="footer">
           <span>© 2026 HawaPlan</span>
           <div>
@@ -802,11 +485,35 @@ export default function HawaApp() {
           <span>Plan with care. Breathe with context.</span>
         </footer>
       </main>
+
       {toast && (
-        <div className="toast" role="status">
-          <Check size={16} /> {toast}
+        <div className="toast" role="status" aria-live="polite">
+          <Check size={16} aria-hidden="true" /> {toast}
         </div>
       )}
+
+      {caregiverModalOpen && plan && (
+        <CaregiverModal
+          place={place}
+          activity={activityNames[options.activity]}
+          date={startDate}
+          timeWindow={
+            plan.best
+              ? `${formatTime(plan.best.start)} – ${formatTime(plan.best.end)}`
+              : `${formatTime(`${startDate}T${String(options.preferredHour).padStart(2, "0")}:00`)}`
+          }
+          summary={
+            plan.best
+              ? `${plan.best.averagePm25} µg/m³ modeled PM₂.₅ (${plan.aqiCategory?.label ?? "Forecasted"})`
+              : "Preferred routine time"
+          }
+          careAction={plan.careAction}
+          emissionAction={plan.emissionAction}
+          indoorAction={plan.indoorAction}
+          onClose={() => setCaregiverModalOpen(false)}
+        />
+      )}
+
       {authMode && (
         <AuthDialog
           mode={authMode}

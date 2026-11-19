@@ -1,3 +1,9 @@
+/**
+ * @file normalize.ts
+ * Validation and sanitization for untrusted user and storage payloads.
+ * Protects against XSS, schema tampering, corrupted local caches, and invalid date formats.
+ */
+
 import {
   isPlace,
   isPlanOptions,
@@ -6,10 +12,15 @@ import {
   type Place,
   type SavedPlan,
 } from "./saved";
+import type { PlanOptions, VulnerabilityProfile } from "./planner";
 
-const short = (value: unknown, max: number) =>
+const short = (value: unknown, max: number): string =>
   typeof value === "string" ? value.slice(0, max) : "";
-const scheduleDate = (value: unknown) => {
+
+/**
+ * Validates that an input is a genuine Gregorian date in YYYY-MM-DD format.
+ */
+const scheduleDate = (value: unknown): string => {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return "";
   const parsed = Date.parse(`${value}T00:00:00Z`);
@@ -18,8 +29,13 @@ const scheduleDate = (value: unknown) => {
     ? value
     : "";
 };
+
 const scheduleSpan = (value: unknown): 1 | 7 | 30 =>
   value === 7 || value === 30 ? value : 1;
+
+/**
+ * Sanitizes place attributes and bounds string lengths.
+ */
 const cleanPlace = (place: Place): Place => ({
   id: Number.isFinite(place.id) ? place.id : 0,
   name: place.name.slice(0, 80),
@@ -32,10 +48,43 @@ const cleanPlace = (place: Place): Place => ({
     : "city",
 });
 
+/**
+ * Sanitizes plan options, defaulting vulnerabilityProfile safely when absent.
+ */
+const cleanOptions = (options: PlanOptions): PlanOptions => {
+  const validProfiles: VulnerabilityProfile[] = [
+    "general",
+    "children",
+    "elderly",
+    "respiratory",
+    "athletes",
+  ];
+  return {
+    activity: options.activity,
+    preferredHour: options.preferredHour,
+    durationMinutes: options.durationMinutes,
+    flexibilityHours: options.flexibilityHours,
+    travelMode: options.travelMode,
+    sensitive: options.sensitive,
+    vulnerabilityProfile: validProfiles.includes(
+      options.vulnerabilityProfile as VulnerabilityProfile,
+    )
+      ? options.vulnerabilityProfile
+      : "general",
+  };
+};
+
+/**
+ * Validates and deeply normalizes untrusted JSON data into strongly-typed AppData.
+ * Returns null if fundamental schema properties are corrupted.
+ *
+ * @param value Untrusted JSON input
+ */
 export function normalizeData(value: unknown): AppData | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
   if (!isPlace(input.place) || !isPlanOptions(input.options)) return null;
+
   const messages: ChatMessage[] = Array.isArray(input.messages)
     ? input.messages.slice(-100).flatMap((item: unknown) => {
         if (!item || typeof item !== "object") return [];
@@ -59,6 +108,7 @@ export function normalizeData(value: unknown): AppData | null {
         ];
       })
     : [];
+
   const plans: SavedPlan[] = Array.isArray(input.plans)
     ? input.plans.slice(0, 30).flatMap((item: unknown) => {
         if (!item || typeof item !== "object") return [];
@@ -81,7 +131,7 @@ export function normalizeData(value: unknown): AppData | null {
             time: short(p.time, 40),
             summary: short(p.summary, 300),
             place: cleanPlace(p.place),
-            options: p.options,
+            options: cleanOptions(p.options),
             startDate: scheduleDate(p.startDate),
             spanDays: scheduleSpan(p.spanDays),
             timezone: short(p.timezone, 80),
@@ -92,9 +142,10 @@ export function normalizeData(value: unknown): AppData | null {
         ];
       })
     : [];
+
   return {
     place: cleanPlace(input.place),
-    options: input.options,
+    options: cleanOptions(input.options),
     preferencesUpdatedAt:
       typeof input.preferencesUpdatedAt === "number" &&
       Number.isFinite(input.preferencesUpdatedAt)

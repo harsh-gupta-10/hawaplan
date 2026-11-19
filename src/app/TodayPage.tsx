@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   formatTime,
+  getAqiCategory,
   type Forecast,
   type Plan,
   type PlanOptions,
@@ -20,6 +21,7 @@ import type { AppData, Place } from "../shared/saved";
 import AirChart from "./AirChart";
 import PlannerSection from "./PlannerSection";
 import ConversationSection from "./ConversationSection";
+import AqiBadge from "./components/AqiBadge";
 
 interface TodayPageProps {
   place: Place;
@@ -55,6 +57,7 @@ interface TodayPageProps {
   onClearChat: () => void;
   onQuestionChange: (question: string) => void;
   onAsk: () => void;
+  onOpenCaregiverBrief?: () => void;
 }
 
 export default function TodayPage({
@@ -88,9 +91,13 @@ export default function TodayPage({
   onClearChat,
   onQuestionChange,
   onAsk,
+  onOpenCaregiverBrief,
 }: TodayPageProps) {
   const forecastDate = formatScheduleDate(startDate);
   const current = forecast?.currentPm25;
+  const currentAqi = forecast
+    ? getAqiCategory(forecast.currentPm25, forecast.hours[0]?.aqi)
+    : null;
   const bestDifferent = Boolean(
     plan?.best && plan?.baseline && plan.best.start !== plan.baseline.start,
   );
@@ -115,9 +122,10 @@ export default function TodayPage({
         </div>
         <div className="date-badge">{forecastDate}</div>
       </div>
+
       {(place.source === "network" || data.preferencesUpdatedAt === 0) && (
         <div className="location-nudge">
-          <span className="nudge-icon">
+          <span className="nudge-icon" aria-hidden="true">
             <LocateFixed size={18} />
           </span>
           <div>
@@ -132,18 +140,25 @@ export default function TodayPage({
                 : "New Delhi is shown as a starting point. Use your current area or choose a city."}
             </p>
           </div>
-          <button onClick={onUseDeviceLocation} disabled={locating}>
+          <button
+            type="button"
+            onClick={onUseDeviceLocation}
+            disabled={locating}
+          >
             {locating ? "Locating…" : "Use my location"}{" "}
-            <ArrowRight size={15} />
+            <ArrowRight size={15} aria-hidden="true" />
           </button>
           {locationError && (
-            <span className="nudge-error">{locationError}</span>
+            <span className="nudge-error" role="alert">
+              {locationError}
+            </span>
           )}
         </div>
       )}
+
       <section className="schedule-bar" aria-label="Choose when to plan">
         <div className="schedule-bar-title">
-          <span className="schedule-icon">
+          <span className="schedule-icon" aria-hidden="true">
             <CalendarDays size={21} />
           </span>
           <div>
@@ -153,52 +168,62 @@ export default function TodayPage({
             </small>
           </div>
         </div>
-        <label>
-          Start date
-          <input
-            aria-label="Plan start date"
-            type="date"
-            min={today}
-            value={startDate}
-            onChange={(event) =>
-              onUpdateSchedule(event.target.value || today, spanDays)
-            }
-          />
-        </label>
-        <label>
-          Plan length
-          <select
-            aria-label="Plan length"
-            value={spanDays}
-            onChange={(event) =>
-              onUpdateSchedule(
-                startDate,
-                Number(event.target.value) as SpanDays,
-              )
-            }
-          >
-            <option value={1}>One day</option>
-            <option value={7}>Next 7 days</option>
-            <option value={30}>Next 30 days</option>
-          </select>
-        </label>
-        <button className="save-plan-button" onClick={onSavePlan}>
-          <Save size={16} /> Save plan
+
+        <div className="schedule-bar-fields">
+          <label htmlFor="schedule-start-date">
+            Start date
+            <input
+              id="schedule-start-date"
+              aria-label="Plan start date"
+              type="date"
+              min={today}
+              value={startDate}
+              onChange={(event) =>
+                onUpdateSchedule(event.target.value || today, spanDays)
+              }
+            />
+          </label>
+
+          <label htmlFor="schedule-span-days">
+            Plan length
+            <select
+              id="schedule-span-days"
+              aria-label="Plan length"
+              value={spanDays}
+              onChange={(event) =>
+                onUpdateSchedule(
+                  startDate,
+                  Number(event.target.value) as SpanDays,
+                )
+              }
+            >
+              <option value={1}>One day</option>
+              <option value={7}>Next 7 days</option>
+              <option value={30}>Next 30 days</option>
+            </select>
+          </label>
+        </div>
+
+        <button type="button" className="save-plan-button" onClick={onSavePlan}>
+          <Save size={16} aria-hidden="true" /> Save plan
         </button>
+
         <a
           className="calendar-link"
           href={calendarUrl}
           target="_blank"
           rel="noreferrer"
         >
-          <CalendarDays size={16} /> Review in Google Calendar{" "}
-          <ArrowUpRight size={15} />
+          <CalendarDays size={16} aria-hidden="true" /> Review in Google
+          Calendar <ArrowUpRight size={15} aria-hidden="true" />
         </a>
       </section>
+
       {spanDays > 1 && (
         <div className="schedule-caveat">
-          <label className="weekday-toggle">
+          <label className="weekday-toggle" htmlFor="schedule-weekdays-only">
             <input
+              id="schedule-weekdays-only"
               type="checkbox"
               checked={weekdaysOnly}
               onChange={(event) => onUpdateWeekdaysOnly(event.target.checked)}
@@ -212,11 +237,15 @@ export default function TodayPage({
           </p>
         </div>
       )}
+
       <section className="hero-grid">
         <div className="hero-card">
           <div className="hero-copy">
             <span className="hero-kicker">
-              <span className="mini-star">✳</span> A LITTLE PLANNING HELPS
+              <span className="mini-star" aria-hidden="true">
+                ✳
+              </span>{" "}
+              A LITTLE PLANNING HELPS
             </span>
             <h2>
               {loadingForecast && !forecast
@@ -228,6 +257,7 @@ export default function TodayPage({
               know what each choice changes.
             </p>
             <button
+              type="button"
               className="hero-link"
               onClick={() =>
                 document
@@ -235,7 +265,7 @@ export default function TodayPage({
                   ?.scrollIntoView({ behavior: "smooth" })
               }
             >
-              Build today’s plan <ArrowUpRight size={18} />
+              Build today’s plan <ArrowUpRight size={18} aria-hidden="true" />
             </button>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -248,19 +278,30 @@ export default function TodayPage({
             <div className="art-cloud cloud-b" />
           </div>
         </div>
+
         <div className="now-card">
           <div className="now-top">
             <span className="eyebrow">OUTDOOR MODEL · NOW</span>
-            <CloudFog size={21} />
+            <CloudFog size={21} aria-hidden="true" />
           </div>
           <div className="now-number">
             {current == null ? "—" : Math.round(current)}
             <span>µg/m³</span>
           </div>
           <div className="now-sub">PM₂.₅ around {place.name}</div>
+
+          {currentAqi && (
+            <div className="now-aqi-badge">
+              <AqiBadge aqiCategory={currentAqi} showAdvisory={false} />
+            </div>
+          )}
+
           <div className="now-divider" />
           <div className="now-bottom">
-            <span className={`status-dot ${forecastIsOld ? "high" : ""}`} />
+            <span
+              className={`status-dot ${forecastIsOld ? "high" : ""}`}
+              aria-hidden="true"
+            />
             <strong>
               {forecastIsOld ? "Saved forecast" : "Latest forecast"}
             </strong>
@@ -273,27 +314,35 @@ export default function TodayPage({
           </p>
         </div>
       </section>
+
       {forecastError && (
         <div className="inline-error" role="status">
-          <Info size={18} /> {forecastError}
-          <button onClick={() => onRefresh()}>
-            <RefreshCw size={15} /> Retry
+          <Info size={18} aria-hidden="true" /> {forecastError}
+          <button type="button" onClick={() => onRefresh()}>
+            <RefreshCw size={15} aria-hidden="true" /> Retry
           </button>
         </div>
       )}
+
       {forecast && (
         <div className="chart-card">
           <AirChart forecast={forecast} selectedTime={plan?.best?.start} />
           <button
+            type="button"
             className="chart-refresh"
             onClick={() => onRefresh()}
             disabled={loadingForecast}
           >
-            <RefreshCw size={14} className={loadingForecast ? "spin" : ""} />{" "}
+            <RefreshCw
+              size={14}
+              className={loadingForecast ? "spin" : ""}
+              aria-hidden="true"
+            />{" "}
             Refresh forecast
           </button>
         </div>
       )}
+
       <PlannerSection
         options={options}
         plan={plan}
@@ -303,7 +352,9 @@ export default function TodayPage({
         startDate={startDate}
         onOptionChange={onOptionChange}
         onSavePlan={onSavePlan}
+        onOpenCaregiverBrief={onOpenCaregiverBrief}
       />
+
       {spanDays > 1 && (
         <section className="schedule-overview">
           <div className="schedule-overview-head">
@@ -344,8 +395,12 @@ export default function TodayPage({
             ))}
           </div>
           <div className="schedule-overview-actions">
-            <button className="save-plan-button" onClick={onSavePlan}>
-              <Save size={16} /> Save this routine
+            <button
+              type="button"
+              className="save-plan-button"
+              onClick={onSavePlan}
+            >
+              <Save size={16} aria-hidden="true" /> Save this routine
             </button>
             <a
               className="calendar-link"
@@ -353,12 +408,13 @@ export default function TodayPage({
               target="_blank"
               rel="noreferrer"
             >
-              <CalendarDays size={16} /> Review in Google Calendar{" "}
-              <ArrowUpRight size={15} />
+              <CalendarDays size={16} aria-hidden="true" /> Review in Google
+              Calendar <ArrowUpRight size={15} aria-hidden="true" />
             </a>
           </div>
         </section>
       )}
+
       <ConversationSection
         messages={data.messages}
         signedIn={signedIn}

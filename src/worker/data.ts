@@ -1,15 +1,28 @@
+/**
+ * @file data.ts
+ * Cloudflare D1 data synchronization route for authenticated user preferences,
+ * saved plans, and chat logs.
+ */
+
 import { currentUser } from "./auth";
 import { emptyData, mergeData, type AppData } from "../shared/saved";
 import { normalizeData } from "../shared/normalize";
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200): Response =>
   Response.json(body, {
     status,
     headers: {
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Permissions-Policy": "geolocation=(self)",
     },
   });
+
+/**
+ * Handles GET (fetch user data) and PUT (sync user data) requests.
+ */
 export async function handleData(
   request: Request,
   db: D1Database,
@@ -26,7 +39,7 @@ export async function handleData(
       try {
         data = normalizeData(JSON.parse(row.payload)) ?? emptyData();
       } catch {
-        /* Use clean data. */
+        /* Use clean data fallback. */
       }
     }
     return json({ data });
@@ -39,7 +52,7 @@ export async function handleData(
     try {
       incoming = normalizeData(JSON.parse(text));
     } catch {
-      /* Invalid JSON. */
+      /* Invalid JSON payload. */
     }
     if (!incoming) return json({ error: "Invalid saved data." }, 400);
     const row = await db
@@ -51,7 +64,7 @@ export async function handleData(
       try {
         existing = normalizeData(JSON.parse(row.payload)) ?? emptyData();
       } catch {
-        /* Use clean data. */
+        /* Use clean data fallback. */
       }
     }
     const merged = mergeData(incoming, existing);

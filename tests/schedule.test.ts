@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { googleCalendarUrl, scheduleDates } from "../src/shared/schedule";
+import {
+  addDays,
+  formatScheduleDate,
+  googleCalendarUrl,
+  scheduleDates,
+} from "../src/shared/schedule";
 import { defaultOptions, defaultPlace } from "../src/shared/saved";
 
 describe("calendar scheduling", () => {
@@ -20,6 +25,20 @@ describe("calendar scheduling", () => {
     expect(url.searchParams.get("ctz")).toBe("Asia/Kolkata");
     expect(url.searchParams.has("recur")).toBe(false);
   });
+
+  it("handles year transition gracefully", () => {
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    const dates = scheduleDates("2026-12-30", 7);
+    expect(dates[0]).toBe("2026-12-30");
+    expect(dates[1]).toBe("2026-12-31");
+    expect(dates[2]).toBe("2027-01-01");
+  });
+
+  it("formats dates into short localized format", () => {
+    expect(formatScheduleDate("2026-11-19")).toContain("Nov");
+    expect(formatScheduleDate("2026-11-19")).toContain("19");
+  });
+
   it("creates a bounded daily recurrence for a month routine", () => {
     const url = new URL(
       googleCalendarUrl({
@@ -34,6 +53,7 @@ describe("calendar scheduling", () => {
       "Recheck the air forecast",
     );
   });
+
   it("skips weekends in a school routine and matches the Calendar recurrence", () => {
     expect(scheduleDates("2026-11-21", 7, true)).toEqual([
       "2026-11-23",

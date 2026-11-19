@@ -32,15 +32,21 @@ Static asset delivery is free and unlimited under current Cloudflare documentati
 - City search and live model forecast.
 - Outing planner with fixed or flexible time.
 - Explicit ambient PM₂.₅ comparison and separate car-trip suggestion.
+- US EPA / WHO AQI category calculation and health advisory breakpoints.
+- Vulnerability profile customization (general, children, elderly, respiratory, athletes).
+- Printable and copyable Caregiver & School Brief modal.
+- Multi-pollutant chart toggling (PM₂.₅, PM₁₀, US AQI) with accessible screen-reader data table.
 - Indoor guide with WHO source links.
 - AI follow-up with bounded input and grounded numeric claims.
 - Community message copy flow.
-- Responsive layout and local preference persistence.
+- Responsive layout, accessible landmarks, and local preference persistence.
 - Approximate network location with optional browser geolocation permission.
 - Saved plans and persistent chat history with account sync.
 - Date-based single plans and 7-/30-day routines with weekday selection and Google Calendar event drafts.
 - Account creation, sign-in, sign-out, and account deletion.
 - Offline app shell and last forecast fallback.
+- Full HTTP security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
+- 51 automated tests covering algorithms, auth/sync, rate limits, security, and accessibility.
 
 ## Next steps after event feedback
 

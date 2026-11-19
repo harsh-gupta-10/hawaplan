@@ -24,6 +24,41 @@ describe("saved data validation", () => {
       normalizeData({ ...emptyData(), place: { name: "Broken" } }),
     ).toBeNull();
     expect(normalizeData(null)).toBeNull();
+    expect(
+      normalizeData({
+        ...emptyData(),
+        place: { ...emptyData().place, latitude: 120 },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeData({
+        ...emptyData(),
+        place: { ...emptyData().place, longitude: -200 },
+      }),
+    ).toBeNull();
+  });
+
+  it("normalizes and sanitizes vulnerability profiles", () => {
+    const data = emptyData();
+    const normalizedChildren = normalizeData({
+      ...data,
+      options: { ...data.options, vulnerabilityProfile: "children" },
+    });
+    expect(normalizedChildren?.options.vulnerabilityProfile).toBe("children");
+
+    // Legacy data without vulnerabilityProfile defaults safely to "general"
+    const legacyNormalized = normalizeData({
+      ...data,
+      options: { ...data.options, vulnerabilityProfile: undefined },
+    });
+    expect(legacyNormalized?.options.vulnerabilityProfile).toBe("general");
+
+    // Untrusted options with invalid vulnerabilityProfile are rejected
+    const invalidNormalized = normalizeData({
+      ...data,
+      options: { ...data.options, vulnerabilityProfile: "unrecognized" },
+    });
+    expect(invalidNormalized).toBeNull();
   });
 
   it("cleans individual saved entries and invalid schedule dates", () => {

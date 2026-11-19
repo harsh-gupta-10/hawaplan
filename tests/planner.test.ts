@@ -21,6 +21,7 @@ const forecast: Forecast = {
     aqi: 150,
   })),
 };
+
 const options: PlanOptions = {
   activity: "school",
   preferredHour: 15,
@@ -28,6 +29,7 @@ const options: PlanOptions = {
   flexibilityHours: 2,
   travelMode: "car",
   sensitive: true,
+  vulnerabilityProfile: "general",
 };
 
 describe("outing comparison", () => {
@@ -36,12 +38,15 @@ describe("outing comparison", () => {
     expect(plan.baseline?.averagePm25).toBe(100);
     expect(plan.best?.start).toBe("2026-11-19T13:00");
     expect(plan.reductionPercent).toBe(50);
+    expect(plan.aqiCategory).toBeDefined();
   });
+
   it("respects a fixed commitment even when a lower hour exists", () => {
     const plan = buildPlan(forecast, { ...options, flexibilityHours: 0 });
     expect(plan.best?.start).toBe("2026-11-19T15:00");
     expect(plan.reductionPercent).toBe(0);
   });
+
   it("does not compare against a past hour", () => {
     const plan = buildPlan(
       { ...forecast, currentTime: "2026-11-19T16:00" },
@@ -50,6 +55,7 @@ describe("outing comparison", () => {
     expect(plan.baseline).toBeNull();
     expect(plan.reductionPercent).toBeNull();
   });
+
   it("weights partial hours and shows the actual end time", () => {
     const plan = buildPlan(forecast, {
       ...options,
@@ -60,12 +66,51 @@ describe("outing comparison", () => {
     expect(plan.baseline?.averagePm25).toBe(70);
     expect(plan.baseline?.end).toBe("2026-11-19T13:30");
   });
-  it("adds extra-care guidance only when selected", () => {
-    expect(buildPlan(forecast, options).careAction).toContain("extra care");
+
+  it("tailors guidance for different vulnerability profiles", () => {
+    expect(
+      buildPlan(forecast, { ...options, vulnerabilityProfile: "children" })
+        .careAction,
+    ).toContain("Children breathe more air");
+
+    expect(
+      buildPlan(forecast, { ...options, vulnerabilityProfile: "elderly" })
+        .careAction,
+    ).toContain("older adults");
+
+    expect(
+      buildPlan(forecast, { ...options, vulnerabilityProfile: "respiratory" })
+        .careAction,
+    ).toContain("asthma or respiratory");
+
+    expect(
+      buildPlan(forecast, { ...options, vulnerabilityProfile: "athletes" })
+        .careAction,
+    ).toContain("High-ventilation");
+
     expect(
       buildPlan(forecast, { ...options, sensitive: false }).careAction,
     ).toBeNull();
   });
+
+  it("tailors travel mode emission actions appropriately", () => {
+    expect(
+      buildPlan(forecast, { ...options, travelMode: "car" }).emissionAction,
+    ).toContain("separate drive means one fewer car trip");
+
+    expect(
+      buildPlan(forecast, { ...options, travelMode: "bus" }).emissionAction,
+    ).toContain("shared bus trip");
+
+    expect(
+      buildPlan(forecast, { ...options, travelMode: "walk" }).emissionAction,
+    ).toContain("avoids a private car trip");
+
+    expect(
+      buildPlan(forecast, { ...options, travelMode: "cycle" }).emissionAction,
+    ).toContain("avoids a private car trip");
+  });
+
   it("uses the selected calendar date instead of the first upcoming day", () => {
     const later = {
       ...forecast,
@@ -83,6 +128,7 @@ describe("outing comparison", () => {
     );
     expect(buildPlan(later, options, "2026-11-21").best).toBeNull();
   });
+
   it("avoids overnight flexible exercise slots but respects a fixed early time", () => {
     const exerciseForecast = {
       ...forecast,

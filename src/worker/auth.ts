@@ -1,3 +1,9 @@
+/**
+ * @file auth.ts
+ * Cloudflare D1 authentication service with PBKDF2 password hashing,
+ * constant-time credential comparison, secure session issuance, and rate limiting.
+ */
+
 export interface AuthEnv {
   DB: D1Database;
 }
@@ -12,14 +18,23 @@ const sessionSeconds = 60 * 60 * 24 * 30;
 const iterations = 100_000;
 const encoder = new TextEncoder();
 
-const hex = (bytes: Uint8Array) =>
+const hex = (bytes: Uint8Array): string =>
   [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-const unhex = (value: string) =>
-  new Uint8Array(
-    value.match(/.{2}/g)?.map((part) => Number.parseInt(part, 16)) ?? [],
-  );
 
-async function digest(value: string) {
+const unhex = (value: string): Uint8Array<ArrayBuffer> => {
+  const matches = value.match(/.{2}/g) ?? [];
+  const buffer = new ArrayBuffer(matches.length);
+  const view = new Uint8Array(buffer);
+  matches.forEach((part, index) => {
+    view[index] = Number.parseInt(part, 16);
+  });
+  return view;
+};
+
+/**
+ * Computes SHA-256 digest hex string.
+ */
+async function digest(value: string): Promise<string> {
   return hex(
     new Uint8Array(
       await crypto.subtle.digest("SHA-256", encoder.encode(value)),
@@ -27,7 +42,13 @@ async function digest(value: string) {
   );
 }
 
-async function passwordHash(password: string, saltHex: string) {
+/**
+ * Derives salted PBKDF2 password hash.
+ */
+async function passwordHash(
+  password: string,
+  saltHex: string,
+): Promise<string> {
   const base = await crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
@@ -43,7 +64,10 @@ async function passwordHash(password: string, saltHex: string) {
   return hex(new Uint8Array(bits));
 }
 
-function equalHex(a: string, b: string) {
+/**
+ * Constant-time hex string comparison preventing timing side-channel attacks.
+ */
+function equalHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;
   for (let i = 0; i < a.length; i++)
@@ -51,7 +75,7 @@ function equalHex(a: string, b: string) {
   return difference === 0;
 }
 
-function cookie(request: Request) {
+function cookie(request: Request): string | null {
   return (
     request.headers
       .get("Cookie")
@@ -66,16 +90,19 @@ function cookieHeader(
   token: string,
   request: Request,
   maxAge = sessionSeconds,
-) {
+): string {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=${maxAge}`;
 }
 
-function json(body: unknown, status = 200, setCookie?: string) {
+function json(body: unknown, status = 200, setCookie?: string): Response {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(self)",
   });
   if (setCookie) headers.set("Set-Cookie", setCookie);
   return new Response(JSON.stringify(body), { status, headers });
@@ -105,12 +132,16 @@ async function readCredentials(
   }
 }
 
-async function attemptKey(request: Request, label: string) {
+async function attemptKey(request: Request, label: string): Promise<string> {
   const ip = request.headers.get("CF-Connecting-IP") ?? "local";
   return digest(`${label}:${ip}`);
 }
 
-async function isLimited(db: D1Database, key: string, maximum: number) {
+async function isLimited(
+  db: D1Database,
+  key: string,
+  maximum: number,
+): Promise<boolean> {
   const row = await db
     .prepare("SELECT attempts, reset_at FROM auth_attempts WHERE key = ?")
     .bind(key)
@@ -118,7 +149,11 @@ async function isLimited(db: D1Database, key: string, maximum: number) {
   return Boolean(row && row.reset_at > Date.now() && row.attempts >= maximum);
 }
 
-async function recordAttempt(db: D1Database, key: string, windowMs: number) {
+async function recordAttempt(
+  db: D1Database,
+  key: string,
+  windowMs: number,
+): Promise<void> {
   const now = Date.now();
   await db
     .prepare(
@@ -128,7 +163,11 @@ async function recordAttempt(db: D1Database, key: string, windowMs: number) {
     .run();
 }
 
-async function issueSession(db: D1Database, user: AuthUser, request: Request) {
+async function issueSession(
+  db: D1Database,
+  user: AuthUser,
+  request: Request,
+): Promise<Response> {
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
   await db
     .prepare(
@@ -144,6 +183,9 @@ async function issueSession(db: D1Database, user: AuthUser, request: Request) {
   return json({ user }, 200, cookieHeader(token, request));
 }
 
+/**
+ * Resolves the authenticated user from the session cookie in D1 database.
+ */
 export async function currentUser(
   request: Request,
   db: D1Database,
@@ -159,6 +201,9 @@ export async function currentUser(
   return row ?? null;
 }
 
+/**
+ * Dispatches authentication subroutes (/api/auth/me, signup, login, logout, account).
+ */
 export async function handleAuth(
   request: Request,
   db: D1Database,
