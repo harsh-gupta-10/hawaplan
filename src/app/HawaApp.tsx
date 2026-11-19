@@ -496,6 +496,7 @@ export default function HawaApp() {
         <nav aria-label="Main navigation">
           <button
             className={`nav-item ${tab === "today" ? "active" : ""}`}
+            aria-current={tab === "today" ? "page" : undefined}
             onClick={() => navigate("today")}
           >
             <CloudFog size={19} /> Today’s plan{" "}
@@ -503,6 +504,7 @@ export default function HawaApp() {
           </button>
           <button
             className={`nav-item ${tab === "plans" ? "active" : ""}`}
+            aria-current={tab === "plans" ? "page" : undefined}
             onClick={() => navigate("plans")}
           >
             <History size={19} /> Saved plans{" "}
@@ -510,6 +512,7 @@ export default function HawaApp() {
           </button>
           <button
             className={`nav-item ${tab === "indoors" ? "active" : ""}`}
+            aria-current={tab === "indoors" ? "page" : undefined}
             onClick={() => navigate("indoors")}
           >
             <House size={19} /> Indoor air guide{" "}
@@ -517,6 +520,7 @@ export default function HawaApp() {
           </button>
           <button
             className={`nav-item ${tab === "community" ? "active" : ""}`}
+            aria-current={tab === "community" ? "page" : undefined}
             onClick={() => navigate("community")}
           >
             <UsersRound size={19} /> Community note{" "}
@@ -544,7 +548,8 @@ export default function HawaApp() {
         <header className="topbar">
           <button
             className="mobile-menu"
-            aria-label="Open menu"
+            aria-label={mobileNav ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNav}
             onClick={() => setMobileNav(!mobileNav)}
           >
             {mobileNav ? <X /> : <Menu />}
@@ -612,6 +617,7 @@ export default function HawaApp() {
                     <Search size={17} />
                     <input
                       ref={citySearchInput}
+                      aria-label="Search for a city"
                       placeholder="Search for a city"
                       value={cityQuery}
                       onChange={(event) => setCityQuery(event.target.value)}
@@ -652,6 +658,11 @@ export default function HawaApp() {
             <div className="account-picker">
               <button
                 className="account-button"
+                aria-label={
+                  account
+                    ? `Account: ${account.username}`
+                    : "Sign in or create account"
+                }
                 onClick={() => {
                   setAccountOpen(!accountOpen);
                   setCityOpen(false);

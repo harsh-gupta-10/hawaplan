@@ -274,7 +274,7 @@ export default function TodayPage({
         </div>
       </section>
       {forecastError && (
-        <div className="inline-error">
+        <div className="inline-error" role="status">
           <Info size={18} /> {forecastError}
           <button onClick={() => onRefresh()}>
             <RefreshCw size={15} /> Retry
