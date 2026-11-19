@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   emptyData,
+  isPlace,
+  isPlanOptions,
   mergeData,
   type AppData,
   type ChatMessage,
   type Place,
   type SavedPlan,
 } from "../shared/saved";
+import { normalizeData } from "../shared/normalize";
 import type { PlanOptions } from "../shared/planner";
 
 export interface Account {
@@ -37,16 +40,7 @@ function removeLocal(key: string) {
 
 function readLocal(key: string): AppData | null {
   try {
-    const value = JSON.parse(
-      localStorage.getItem(key) ?? "null",
-    ) as AppData | null;
-    if (
-      value?.place &&
-      value?.options &&
-      Array.isArray(value.messages) &&
-      Array.isArray(value.plans)
-    )
-      return value;
+    return normalizeData(JSON.parse(localStorage.getItem(key) ?? "null"));
   } catch {
     /* Ignore an invalid cache. */
   }
@@ -60,7 +54,7 @@ function readGuest(): AppData {
     const legacy = JSON.parse(
       localStorage.getItem("hawaplan-preferences-v1") ?? "null",
     ) as { place?: Place; options?: PlanOptions } | null;
-    if (legacy?.place && legacy?.options)
+    if (isPlace(legacy?.place) && isPlanOptions(legacy?.options))
       return {
         ...emptyData(),
         place: legacy.place,

@@ -81,13 +81,18 @@ export function isPlanOptions(value: unknown): value is PlanOptions {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
   return (
-    ["school", "walk", "errands", "exercise"].includes(String(o.activity)) &&
+    typeof o.activity === "string" &&
+    ["school", "walk", "errands", "exercise"].includes(o.activity) &&
+    typeof o.preferredHour === "number" &&
     Number.isInteger(o.preferredHour) &&
-    Number(o.preferredHour) >= 0 &&
-    Number(o.preferredHour) <= 23 &&
-    [30, 60, 90, 120].includes(Number(o.durationMinutes)) &&
-    [0, 2, 4, 6].includes(Number(o.flexibilityHours)) &&
-    ["car", "bus", "walk", "cycle"].includes(String(o.travelMode)) &&
+    o.preferredHour >= 0 &&
+    o.preferredHour <= 23 &&
+    typeof o.durationMinutes === "number" &&
+    [30, 60, 90, 120].includes(o.durationMinutes) &&
+    typeof o.flexibilityHours === "number" &&
+    [0, 2, 4, 6].includes(o.flexibilityHours) &&
+    typeof o.travelMode === "string" &&
+    ["car", "bus", "walk", "cycle"].includes(o.travelMode) &&
     typeof o.sensitive === "boolean"
   );
 }

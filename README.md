@@ -45,7 +45,7 @@ The React app and static assets are served by Cloudflare Workers Static Assets. 
 
 ```text
 src/app/       React UI, account flow, local persistence, styles
-src/shared/    Planner, schedule, and saved-data logic shared with the Worker
+src/shared/    Planner, schedule, and validated saved-data logic shared with the Worker
 src/worker/    API routes, authentication, D1 sync, Workers AI
 public/        PWA service worker, manifest, icon
 migrations/    D1 schema
@@ -77,7 +77,7 @@ npm run check
 npm run deploy
 ```
 
-**npm run check** runs Prettier, ESLint with React Hooks and accessibility rules, TypeScript, the production build, and the automated test suite. GitHub Actions runs the same check on pushes and pull requests. **npm run deploy** builds the UI, applies remote D1 migrations, and publishes the Worker. The project was verified with 25 automated tests, including API input validation, and live checks of forecast, AI response, signup, data sync, logout/login, deletion, calendar URL generation, and mobile layout. Local build output and dependencies are ignored by Git so the repository stays small.
+**npm run check** runs Prettier, ESLint with React Hooks and accessibility rules, TypeScript, the production build, and the automated test suite. GitHub Actions runs the same check on pushes and pull requests. **npm run deploy** builds the UI, applies remote D1 migrations, and publishes the Worker. The project was verified with 28 automated tests, including API input validation and corrupted-cache recovery, and live checks of forecast, AI response, signup, data sync, logout/login, deletion, calendar URL generation, and mobile layout. Local build output and dependencies are ignored by Git so the repository stays small.
 
 ## Security, accessibility, and assumptions
 
